@@ -5,7 +5,7 @@ import math
 import numpy as np
 import os
 from tqdm import tqdm
-
+from transformers import BertTokenizer
 import torch
 from torch.utils.data import DataLoader
 
@@ -14,7 +14,7 @@ from transformers import AdamW
 from transformers import get_cosine_schedule_with_warmup
 
 from data_pipeline import AspectDetectionDataset, aspect_detection_collate
-from model import MIL
+from mil_model import MIL
 
 
 def _update_counts(gold, pred, counts):
@@ -29,7 +29,8 @@ def _update_counts(gold, pred, counts):
 def evaluate(args):
   print(args)
 
-  tokenizer = AutoTokenizer.from_pretrained(args.model_type)
+  # tokenizer = AutoTokenizer.from_pretrained(args.model_type)
+  tokenizer = BertTokenizer.from_pretrained(args.pretrained_dir)
   dataset = AspectDetectionDataset(
     args.data_dir + '/' + args.dataset + '/' + args.dev_file, tokenizer)
   dataloader = DataLoader(dataset, batch_size=args.batch_size, collate_fn=aspect_detection_collate)
@@ -151,7 +152,8 @@ def train(args):
 
   print('Preparing data...')
   
-  tokenizer = AutoTokenizer.from_pretrained(args.model_type)
+  # tokenizer = AutoTokenizer.from_pretrained(args.model_type)
+  tokenizer = BertTokenizer.from_pretrained(args.pretrained_dir)
   dataset = AspectDetectionDataset(
     args.data_dir + '/' + args.dataset + '/' + args.train_file, tokenizer)
   dataloader = DataLoader(dataset, batch_size=args.batch_size, collate_fn=aspect_detection_collate)
@@ -251,21 +253,23 @@ def train(args):
           sentence = tokenizer.decode(sentence, skip_special_tokens=True)
           if len(sentence.strip()) == 0:
             continue
-          print('Sentence', sid, ':', sentence)
-          print(sentence_pred[0][sid].tolist())
+          # print('Sentence', sid, ':', sentence)
+          # print(sentence_pred[0][sid].tolist())
         print()
 
 
       if step % args.ckpt_every == 0:
         print('Saving...')
         os.makedirs(args.model_dir + '/' + args.dataset, exist_ok=True)
+        # tmp_dir = args.model_dir + '/' + args.dataset + '/' + args.model_name + '.model' % (step, np.mean(losses), , )
+        tmp_dir = f"{args.model_dir}/{args.dataset}/{args.model_name}_{step}.model"
         torch.save({
           'model': model.state_dict(),
           'optimizer': optimizer.state_dict(),
           'scheduler': scheduler.state_dict(),
           'step': step,
           'loss': np.mean(dev_loss)
-        }, args.model_dir + '/' + args.dataset + '/' + args.model_name + '.model' % (step, np.mean(losses), doc_f1, sent_f1))
+        }, tmp_dir)
         losses = []
 
       if step == args.no_train_steps:
@@ -287,6 +291,7 @@ if __name__ == '__main__':
   parser.add_argument('-data_dir', default='data', type=str)
   parser.add_argument('-model_dir', default='model', type=str)
 
+  parser.add_argument('-pretrained_dir', default='model/bert_wwm', type=str)
   parser.add_argument('-model_type', default='distilroberta-base', type=str)
   parser.add_argument('-model_dim', default=768, type=int)
   parser.add_argument('-num_heads', default=12, type=int)
@@ -302,6 +307,15 @@ if __name__ == '__main__':
 
 
   args = parser.parse_args()
+
+  args.mode = "train"
+  args.dataset = "park"
+  args.num_aspects = 6
+  args.model_name = "mil"
+  args.data_dir = "../data"
+  args.model_dir = "../model_0628"
+  args.pretrained_dir = "../model/bert_wwm"
+
   if args.mode == 'train':
     train(args)
   else:

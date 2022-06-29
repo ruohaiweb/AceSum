@@ -10,7 +10,7 @@ from transformers import AutoTokenizer
 from nltk.tokenize import word_tokenize
 
 from data_pipeline import aspect_detection_collate
-from model import MIL
+from mil_model import MIL
 
 import time
 
@@ -42,7 +42,8 @@ def create_train_data(args,
   # obtain data
   data = []
 
-  f = open('data/' + args.dataset + '/train.jsonl', 'r')
+  # f = open('data/' + args.dataset + '/train.jsonl', 'r')
+  f = open(f"{args.data_dir}/{args.dataset}/train.jsonl", 'r')
   for line in tqdm(f):
     inst = json.loads(line.strip())
     data.append(inst)
@@ -54,8 +55,10 @@ def create_train_data(args,
   # get model
   model, tokenizer = prepare_model(args)
 
-  dataset_file = 'data/' + args.dataset + '/train.sum.jsonl'
-  
+  # dataset_file = 'data/' + args.dataset + '/train.sum.jsonl'
+  dataset_file = f"{args.result_dir}/{args.dataset}/train.sum.jsonl"
+  if not os.path.exists(f"{args.result_dir}/{args.dataset}"):
+    os.makedirs(f"{args.result_dir}/{args.dataset}")
   summary_set = set()
   if os.path.exists(dataset_file):
     # this is to make sure there are no duplicates when
@@ -71,10 +74,14 @@ def create_train_data(args,
     f.close()
 
   count = 0
+
   for inst in tqdm(data):
+    # 1个商品的循环，1个商品有n个review_list
     total_reviews = inst['reviews']
 
     for i in range(0, len(total_reviews), 1000):
+      # 1个review_list，1个review_list有n条review
+
       reviews = total_reviews[i:i+1000]
       reviews = [review for review in reviews if len(review['sentences']) != 0]
 
@@ -85,6 +92,7 @@ def create_train_data(args,
       # tokenize reviews
       tok_reviews = []
       for review in reviews:
+        # 1个review，1review有n个token
         tok_reviews.append([tokenizer.encode(sentence) for sentence in review['sentences']])
 
       sentence_switches_list = []
@@ -92,8 +100,9 @@ def create_train_data(args,
       document_switches = []
 
       # run model
-      print('running model...')
+      # print('running model...')
       for j in range(0, len(tok_reviews), 2):
+        # 1个review，1review有n个token
         tok_reviews_batch = tok_reviews[j:j+2]
 
         inp_batch = [(review, -1) for review in tok_reviews_batch]
@@ -155,22 +164,27 @@ def create_train_data(args,
           word_switches_list.append(word_switches) # list of list of list of switches
 
       # sample summary and its reviews, keywords
-      print('creating data...')
+      # print('creating data...')
       for s_id, summary in enumerate(reviews):
-        sentence_list = []
-        for j, sentence in enumerate(summary['sentences']):
+        # 1个review，1review有n个sentence
+        sentence_list = [] # 包含aspect的sentence
+        for j, sentence in enumerate(summary['sentences']): # summary名字容易混淆，summary就是review，包含多个sentence
+          # 1个sentence
           sentence_switch = sentence_switches_list[s_id][j][1]
           contains_aspect = np.any([x>0 for x in sentence_switch])
           if not contains_aspect:
+            # 跳过
             continue
           sentence_list.append(sentence)
         summary = ' '.join(sentence_list)
 
         if summary in summary_set:
+          # 跳过
           continue
 
         # check min max length
         if len(summary.split()) < min_summary_tokens or len(summary.split()) > max_summary_tokens:
+          # 跳过
           continue
 
         document_switch = document_switches[s_id]
@@ -233,7 +247,7 @@ def create_train_data(args,
         pair['keywords'] = keywords
         pair['switch'] = document_switch
         f = open(dataset_file, 'a')
-        f.write(json.dumps(pair) + '\n')
+        f.write(json.dumps(pair, ensure_ascii=False) + '\n')
         f.close()
         count += 1
 
@@ -257,12 +271,13 @@ def create_aspect_test_data(args,
 
   for split in ['dev', 'test']:
     # obtain data
-    f = open('data/' + args.dataset + '/' + split + '.json', 'r')
+    # f = open('data/' + args.dataset + '/' + split + '.json', 'r')
+    f = open(f"{args.data_dir}/{args.dataset}/{split}.jsonl", 'w')
     data = json.load(f)
     f.close()
 
-    f = open('data/' + args.dataset + '/' + split + '.sum.aspect.jsonl', 'w')
-
+    # f = open('data/' + args.dataset + '/' + split + '.sum.aspect.jsonl', 'w')
+    f = open(f"{args.result_dir}/{args.dataset}/{split}.sum.aspect.jsonl", 'w')
     for inst in tqdm(data):
       reviews = inst['reviews']
 
@@ -369,7 +384,7 @@ def create_aspect_test_data(args,
         pair['reviews'] = new_reviews
         pair['keywords'] = keywords
         pair['switch'] = document_switch
-        f.write(json.dumps(pair) + '\n')
+        f.write(json.dumps(pair, ensure_ascii=False) + '\n')
 
     f.close()
 
@@ -385,11 +400,13 @@ def create_general_test_data(args,
     # obtain data
     data = []
 
-    f = open('data/' + args.dataset + '/' + split + '.json', 'r')
+    # f = open('data/' + args.dataset + '/' + split + '.json', 'r')
+    f = open(f"{args.data_dir}/{args.dataset}/{split}/.json", 'r')
     data = json.load(f)
     f.close()
 
-    f = open('data/' + args.dataset + '/' + split + '.sum.general.jsonl', 'w')
+    # f = open('data/' + args.dataset + '/' + split + '.sum.general.jsonl', 'w')
+    f = open(f"{args.result_dir}/{args.dataset}/{split}.sum.general.jsonl", 'w')
 
     for inst in tqdm(data):
       reviews = inst['reviews']
@@ -499,7 +516,7 @@ def create_general_test_data(args,
       pair['reviews'] = new_reviews
       pair['keywords'] = keywords
       pair['switch'] = document_switch
-      f.write(json.dumps(pair) + '\n')
+      f.write(json.dumps(pair, ensure_ascii=False) + '\n')
 
     f.close()
 
@@ -509,14 +526,31 @@ if __name__ == '__main__':
 
   parser.add_argument('-mode', default='train', type=str)
 
+  parser.add_argument('-data_dir', default='data', type=str)
+  parser.add_argument('-result_dir', default='data', type=str)
   parser.add_argument('-dataset', default='space', type=str)
   parser.add_argument('-num_aspects', default=6, type=int)
+
+  parser.add_argument('-model_dim', default=768, type=int)
+  parser.add_argument('-num_heads', default=12, type=int)
+  parser.add_argument('-num_layers', default=3, type=int)
+  parser.add_argument('-vocab_size', default=50265, type=int)
 
   parser.add_argument('-load_model', default=None, type=str)
   parser.add_argument('-model_type', default='distilroberta-base', type=str)
 
   args = parser.parse_args()
 
+  # -result_dir='data0624' -mode=train -dataset=space -num_aspects=6 -load_model=
+  args.result_dir = "../data0628"
+  args.data_dir = "../data"
+  args.mode = "train"
+  args.dataset="park"
+  args.num_aspects=6
+  args.load_model="../model/park/mil_3000.model"
+
+  if not os.path.exists(args.result_dir):
+    os.makedirs(args.result_dir)
   if args.mode == 'train':
     create_train_data(args)
   elif args.mode == 'eval-aspect':

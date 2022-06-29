@@ -1,0 +1,23 @@
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### VS Code ###
+.vscode/
+
+### log ###
+logs
+
+### Mac ###
+.DS_Store
+
+__pycache__
+.pytest_cache
+data*
+pretrain
+models
+output
+*.log
+model

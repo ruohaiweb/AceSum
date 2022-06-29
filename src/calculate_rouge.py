@@ -13,19 +13,24 @@ def rouge_preprocess(text):
 
 
 def calculate(gold_sums, pred_sums, num_aspects=6, rouge_eval=None):
+  # print(f"gold_sums:{gold_sums}, pred_sums:{pred_sums}")
   if rouge_eval is None:
     rouge_eval = rouge.Rouge(metrics=['rouge-n', 'rouge-l'],
                              max_n=2,
                              limit_length=False,
-                             apply_avg=True,
-                             apply_best=False,
+                             apply_avg=False,
+                             apply_best=True,
                              alpha=0.5, # Default F1_score
                              stemming=True)
 
   scores = rouge_eval.get_scores(pred_sums, gold_sums)
 
-  rouge_l = scores['rouge-l']['f'] * 100
   rouge_1 = scores['rouge-1']['f'] * 100
   rouge_2 = scores['rouge-2']['f'] * 100
+  rouge_l = scores['rouge-l']['f'] * 100
 
   return rouge_1, rouge_2, rouge_l
+
+
+if __name__ == "__main__":
+    calculate([["xxx"]], ["xx"])

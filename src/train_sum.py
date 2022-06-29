@@ -34,6 +34,10 @@ def train(args):
       train_file = args.data_dir + '/' + args.dataset + '/train.sum.jsonl'
   else:
     train_file = args.train_file
+
+  save_model_dir = args.model_dir + '/' + args.dataset
+  if not os.path.exists(save_model_dir):
+    os.makedirs(save_model_dir)
   dataset = SummarizationDataset(
     train_file, 
     use_keywords=args.use_keywords, use_switch=args.use_switch)
@@ -44,15 +48,16 @@ def train(args):
   else:
     asp_dev_file = args.asp_dev_file
   asp_dev_dataset = SummarizationDataset(
-    asp_test_file, 
+    asp_dev_file,
     use_keywords=args.use_keywords, use_switch=args.use_switch, shuffle=False)
   asp_dev_dataloader = DataLoader(asp_dev_dataset, batch_size=args.batch_size)
   f = open(asp_dev_file, 'r')
   lines = f.readlines()
   data = [json.loads(line) for line in lines]
   f.close()
-  asp_gold_sums = [[summary.lower() for summary in inst['summary']] for inst in data]
-
+  # TODO
+  # asp_gold_sums = [[summary.lower() for summary in inst['summary']] for inst in data]
+  asp_gold_sums = [inst["summary"]  for inst in data]
   if args.gen_dev_file is None:
     gen_dev_file = args.data_dir + '/' + args.dataset + '/dev.sum.general.jsonl'
   else:
@@ -106,8 +111,8 @@ def train(args):
       model.train()
 
       batch_encoding = tokenizer.prepare_seq2seq_batch(
-        src_texts=inp_batch,
-        tgt_texts=out_batch,
+        src_texts=list(inp_batch),
+        tgt_texts=list(out_batch),
         max_length=args.max_length,
         max_target_length=args.max_target_length,
         padding=True,
@@ -147,8 +152,8 @@ def train(args):
         gen_pred_sums = []
         for _, (inp_batch, out_batch, _) in enumerate(tqdm(gen_dev_dataloader)):
           batch_encoding = tokenizer.prepare_seq2seq_batch(
-            src_texts=inp_batch,
-            tgt_texts=out_batch,
+            src_texts=list(inp_batch),
+            tgt_texts=list(out_batch),
             max_length=args.max_length,
             max_target_length=args.max_target_length,
             padding=True,
@@ -180,8 +185,8 @@ def train(args):
           model.eval()
 
           batch_encoding = tokenizer.prepare_seq2seq_batch(
-            src_texts=inp_batch,
-            tgt_texts=out_batch,
+            src_texts=list(inp_batch),
+            tgt_texts=list(out_batch),
             max_length=args.max_length,
             max_target_length=args.max_target_length,
             padding=True,
@@ -296,8 +301,8 @@ def evaluate(args, test_type='general'):
     model.eval()
 
     batch_encoding = tokenizer.prepare_seq2seq_batch(
-      src_texts=inp_batch,
-      tgt_texts=out_batch,
+      src_texts=list(inp_batch),
+      tgt_texts=list(out_batch),
       max_length=args.max_length,
       max_target_length=args.max_target_length,
       padding=True,
@@ -345,8 +350,8 @@ if __name__ == '__main__':
 
   parser.add_argument('-model_type', default='t5-small', type=str)
   parser.add_argument('-model_dim', default=512, type=int)
-  parser.add_argument('-use_keywords', default='input', type=str) # none, input, output
-  parser.add_argument('-use_switch', default='input', type=str) # none, input, output
+  parser.add_argument('-use_keywords', default='none', type=str) # none, input, output
+  parser.add_argument('-use_switch', default='none', type=str) # none, input, output
 
   parser.add_argument('-batch_size', default=16, type=int)
   parser.add_argument('-learning_rate', default=1e-6, type=float)
@@ -365,6 +370,17 @@ if __name__ == '__main__':
   parser.add_argument('-length_penalty', default=1, type=float)
 
   args = parser.parse_args()
+
+  # -mode=train -data_dir=data_backup -dataset=space -num_aspects=6 -model_name=sum -model_dir="model_0625"
+  args.mode = "train"
+  args.dataset = "park"
+  args.num_aspects = 6
+  args.model_name = "sum"
+  args.data_dir = "../data0628"
+  args.model_dir = "../model_0628"
+  args.model_type = "google/mt5-small"
+  # args.pretrained_dir = "../model/bert_wwm"
+
   if args.mode == 'train':
     train(args)
   elif args.mode == 'eval-general':
